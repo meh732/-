@@ -960,7 +960,7 @@ async function startBot() {
     bot.hears(/📥.*دریافت فایل پشتیبان/i, async (ctx: any) => {
       if (ctx.chat.type === "private" && isAdmin(ctx)) {
          try {
-            ctx.reply("در حال بازیابی اطلاعات و ساخت فایل اکسل پشتیبان...");
+            ctx.reply("در حال آماده‌سازی و ساخت فایل‌های پشتیبان انبار و سیستم...");
             
             const wb = XLSX.utils.book_new();
             
@@ -976,8 +976,37 @@ async function startBot() {
 
             await ctx.replyWithDocument({
               source: buffer,
-              filename: `backup_${new Date().toISOString().split('T')[0]}.xlsx`
-            }, { caption: "✅ فایل پشتیبان شامل آخرین تغییرات موجودی انبار و لیست تقاضای مشتریان مجاز." });
+              filename: `inventory_backup_${new Date().toISOString().split('T')[0]}.xlsx`
+            }, { caption: "📊 *فایل اکسل موجودی انبار و تقاضای مشتریان*\n\nاین فایل صرفاً برای مشاهده و ویرایش دستی کالاهاست." });
+
+            // Generate JSON System Backup (including Bot Token, Admin ID, configuration, and items)
+            const jsonBackup = {
+              type: "inventory_bot_backup",
+              version: "1.0",
+              config: {
+                token: state.config.token,
+                adminId: state.config.adminId,
+                groupId: state.config.groupId,
+                customerMessage: state.config.customerMessage,
+                groupAccess: state.config.groupAccess,
+                botEnabled: state.config.botEnabled,
+                disableCustomerPm: state.config.disableCustomerPm
+              },
+              inventory: state.inventory || [],
+              customers: state.customers || [],
+              groups: state.groups || []
+            };
+
+            const jsonBuffer = Buffer.from(JSON.stringify(jsonBackup, null, 2), "utf-8");
+
+            await ctx.replyWithDocument({
+              source: jsonBuffer,
+              filename: `system_backup_${new Date().toISOString().split('T')[0]}.json`
+            }, { 
+              caption: "📥 *فایل پشتیبان کامل سیستمی*\n" +
+                       "⚠️ شامل توکن بات، آیدی عددی ادمین، لیست کالاها و تمام تنظیمات ربات.\n\n" +
+                       "💡 در صورت نیاز به بازیابی کل اطلاعات یا انتقال ربات، کافیست این فایل `.json` را مستقیماً به همین چت فوروارد یا ارسال کنید تا تمام اطلاعات در یک لحظه بازیابی شوند."
+            });
 
          } catch (e: any) {
               console.error(e);
@@ -1197,57 +1226,108 @@ async function startBot() {
     bot.command('help', (ctx: any) => {
       if (ctx.chat.type === "private") {
         if (isAdmin(ctx)) {
-          ctx.reply("💡 راهنمای استفاده از ربات مانیتورینگ موجودی کالا:\n\n۱. برای شروع، ربات را در گروه‌های کاری خود عضو کنید.\n۲. هر کدی که در چت گروه نوشته شود و دقیقاً با یکی از کدهای تعریف‌ شده در انبار همخوانی داشته باشد توسط ربات اسکن می‌گردد.\n۳. بلافاصله مشخصات محصول برای کاربر ارسال شده و برای مدیر نیز یک پیام اطلاع‌رسانی فرستاده خواهد شد.\n۴. در صورتی که کاربر ربات را استارت نکرده باشد، ربات در همان گروه به او یادآوری می‌کند تا ابتدا ربات را استارت نماید.");
+          ctx.reply("💡 راهنمای استفاده از ربات مانیتورینگ موجودی کالا:\n\n۱. برای شروع، ربات را در گروه‌های کاری خود عضو کنید.\n�    bot.on("document", async (ctx: any) => {
+      if (ctx.chat.type === "private" && isAdmin(ctx)) {
+        const doc = ctx.message.document;
+        const fileName = doc.file_name || "";
+        
+        if (doc.mime_type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" || fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+           ctx.reply("در حال بررسی و بروزرسانی موجودی انبار...");
+           try {
+              const fileLink = await ctx.telegram.getFileLink(doc.file_id);
+              const response = await fetch(fileLink.toString());
+              const arrayBuffer = await response.arrayBuffer();
+              const buffer = Buffer.from(arrayBuffer);
+              
+              const wb = XLSX.read(buffer, { type: 'buffer' });
+              const wsname = wb.SheetNames[0];
+              const ws = wb.Sheets[wsname];
+              const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+              
+              if (data.length < 2) {
+                return ctx.reply("❌ فایل اکسل خالی است یا ستون‌های مناسب را ندارد.");
+              }
+
+              const headers = data[0].map((h: string) => h?.toString().toLowerCase().trim());
+              const codeIdx = headers.findIndex((h: string) => h === 'کد' || h === 'code');
+              const nameIdx = headers.findIndex((h: string) => h === 'نام' || h === 'name' || h === 'title' || h === 'عنوان');
+              const stockIdx = headers.findIndex((h: string) => h === 'موجودی' || h === 'stock' || h === 'qty' || h === 'تعداد');
+
+              if (codeIdx === -1) {
+                return ctx.reply("❌ ستون 'کد' (یا code) در ردیف اول فایل اکسل پیدا نشد.");
+              }
+
+              const newInventory: InventoryItem[] = [];
+              for (let i = 1; i < data.length; i++) {
+                const row = data[i];
+                if (!row || row.length === 0 || !row[codeIdx]) continue;
+                
+                let itemStock = 1;
+                if (stockIdx !== -1 && row[stockIdx] !== undefined && row[stockIdx] !== null && String(row[stockIdx]).trim() !== "") {
+                  const numValue = Number(row[stockIdx]);
+                  itemStock = isNaN(numValue) ? 0 : numValue;
+                }
+
+                newInventory.push({
+                  code: String(row[codeIdx]).trim(),
+                  name: nameIdx !== -1 && row[nameIdx] ? String(row[nameIdx]).trim() : 'بدون نام',
+                  stock: itemStock
+                });
+              }
+
+              state.inventory = newInventory;
+              saveState();
+              ctx.reply(`✅ موجودی انبار با موفقیت با فایل اکسل جایگزین شد.\nتعداد ${newInventory.length} کالا در انبار ثبت شد.`);
+           } catch (e: any) {
+              console.error(e);
+              ctx.reply("❌ خطا در پردازش فایل: " + e.message);
+           }
+        } else if (doc.mime_type === "application/json" || fileName.endsWith('.json')) {
+           ctx.reply("📥 در حال بررسی و بازیابی فایل پشتیبان کامل سیستم...");
+           try {
+              const fileLink = await ctx.telegram.getFileLink(doc.file_id);
+              const response = await fetch(fileLink.toString());
+              const jsonText = await response.text();
+              const backupData = JSON.parse(jsonText);
+              
+              if (backupData && backupData.type === "inventory_bot_backup") {
+                if (!backupData.config || !backupData.inventory) {
+                  return ctx.reply("❌ قالب فایل پشتیبان سیستمی نامعتبر است.");
+                }
+                
+                // Restore values
+                state.config = { ...state.config, ...backupData.config };
+                state.inventory = backupData.inventory || [];
+                if (backupData.customers) state.customers = backupData.customers;
+                if (backupData.groups) state.groups = backupData.groups;
+                
+                // Keep memory caches up to date
+                lastKnownValidConfig.token = state.config.token || lastKnownValidConfig.token;
+                lastKnownValidConfig.adminId = state.config.adminId || lastKnownValidConfig.adminId;
+                
+                saveState();
+                
+                ctx.reply(
+                  `✅ *بازیابی کامل سیستمی با موفقیت انجام شد!*\n\n` +
+                  `📦 تعداد کل کالاهای انبار: *${state.inventory.length}* عدد\n` +
+                  `👥 تعداد ثبت تقاضای مشتریان: *${state.customers.length}* مورد\n` +
+                  `🔑 توکن ربات: \`${state.config.token ? "بروزرسانی شد" : "بدون تغییر"}\`\n` +
+                  `👑 آیدی ادمین: \`${state.config.adminId || "بدون تغییر"}\`\n` +
+                  `🤖 وضعیت مانیتورینگ آنلاین: *${state.config.botEnabled ? "🟢 فعال و روشن" : "🔴 غیرفعال"}*`,
+                  { parse_mode: 'Markdown' }
+                );
+              } else {
+                ctx.reply("❌ این فایل یک فایل پشتیبان معتبر مربوط به این ربات نیست.");
+              }
+           } catch (e: any) {
+              console.error(e);
+              ctx.reply("❌ خطا در بازیابی فایل پشتیبان سیستمی: " + e.message);
+           }
         } else {
-          ctx.reply(`سلام! این ربات برای پیدا کردن کدهای انبار در گروه‌های مبادله‌ای تعریف شده است. پیامی شامل کد صحیح محصول بفرستید تا اطلاعات خرید به چت شخصی شما فرستاده شود.`);
+           ctx.reply("❌ پسوند فایل معتبر نیست. لطفاً فایل اکسل (.xlsx) یا پشتیبان سیستمی (.json) ارسال کنید.");
         }
       }
-    });
-
-    // Helper commands to get Group ID or User ID easily
-    bot.command(['myid', 'getid', 'groupid', 'id'], async (ctx: any) => {
-      const senderId = String(ctx.from.id);
-      const adminId = state.config.adminId;
-
-      if (ctx.chat.type === "private") {
-        ctx.reply(`🆔 آیدی عددی شما: \`${ctx.from.id}\``, { parse_mode: 'Markdown' });
-        return;
-      }
-
-      // In group/supergroup: Only answer if sender is the bot admin to prevent regular members access
-      if (adminId && senderId === adminId) {
-        ctx.reply(
-          `👥 *اطلاعات گروه فعلی شما:*\n\n` +
-          `🔹 *عنوان گروه:* ${ctx.chat.title || 'بدون نام'}\n` +
-          `🆔 *آیدی عددی گروه:* \`${ctx.chat.id}\` ${ctx.chat.username ? `\n🔗 *یوزرنیم گروه:* @${ctx.chat.username}` : ""}\n\n` +
-          `💡 برای اینکه اسکن کالاها محدود به همین گروه شود، این آیدی عددی را در بخش گروه هدف پنل مدیریت ذخیره کنید.`,
-          { parse_mode: 'Markdown' }
-        );
-      }
-    });
-
-    // Event listener when bot is added to a new group/supergroup
-    bot.on("new_chat_members", async (ctx: any) => {
-      const meAdmin = botMe?.username;
-      const addedMembers = ctx.message?.new_chat_members || [];
-      const wasBotAdded = addedMembers.some((member: any) => member.username === meAdmin);
-
-      if (wasBotAdded && ctx.chat && (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup')) {
-        const grpId = String(ctx.chat.id);
-        const grpTitle = ctx.chat.title || "گروه بدون نام";
-        const grpUsername = ctx.chat.username ? String(ctx.chat.username) : "";
-
-        if (!state.groups) state.groups = [];
-        const existingGrpIdx = state.groups.findIndex(g => String(g.id) === grpId);
-        const groupInfo = {
-          id: grpId,
-          title: grpTitle,
-          username: grpUsername ? `@${grpUsername}` : undefined,
-          lastActive: new Date().toISOString()
-        };
-
-        if (existingGrpIdx !== -1) {
-          state.groups[existingGrpIdx] = groupInfo;
+    });     state.groups[existingGrpIdx] = groupInfo;
         } else {
           state.groups.push(groupInfo);
         }
