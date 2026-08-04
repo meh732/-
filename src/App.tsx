@@ -255,6 +255,132 @@ export default function App() {
     }
   };
 
+  // 1. Export Full JSON Backup
+  const handleExportFullBackup = () => {
+    try {
+      const backupData = {
+        config: state.config,
+        inventory: state.inventory,
+        customers: state.customers || []
+      };
+      const jsonStr = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `MEH_Bot_Full_Backup_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showMessage('فایل پشتیبان کامل سیستم با موفقیت دانلود شد', 'success');
+    } catch (err) {
+      showMessage('خطا در ایجاد فایل پشتیبان کامل', 'error');
+    }
+  };
+
+  // 2. Export Products Inventory Excel (XLSX)
+  const handleExportInventoryExcel = () => {
+    try {
+      if (!state.inventory || state.inventory.length === 0) {
+        showMessage('لیست کالاها خالی است و قابل خروجی گرفتن نیست', 'error');
+        return;
+      }
+      const wb = XLSX.utils.book_new();
+      const sheetData = [
+        ["کد", "نام", "موجودی"],
+        ...state.inventory.map(item => [item.code, item.name, item.stock])
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(sheetData);
+      XLSX.utils.book_append_sheet(wb, ws, "Inventory");
+      XLSX.writeFile(wb, `MEH_Bot_Products_${new Date().toISOString().split('T')[0]}.xlsx`);
+      showMessage('فایل اکسل کالاها با موفقیت دانلود شد', 'success');
+    } catch (err) {
+      showMessage('خطا در ایجاد فایل اکسل کالاها', 'error');
+    }
+  };
+
+  // 3. Restore Full JSON Backup
+  const handleRestoreFullBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!window.confirm('هشدار: بازگردانی پشتیبان تمام اطلاعات فعلی (تنظیمات، توکن، کالاها و مشتریان) را با اطلاعات فایل پشتیبان جایگزین خواهد کرد. آیا مطمئن هستید؟')) {
+      e.target.value = '';
+      return;
+    }
+
+    setIsUploading(true);
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const content = evt.target?.result as string;
+        const backupObj = JSON.parse(content);
+
+        if (!backupObj || typeof backupObj !== 'object') {
+          throw new Error("فرمت فایل پشتیبان نامعتبر است.");
+        }
+
+        const restoredConfig = backupObj.config || null;
+        const restoredInventory = backupObj.inventory || null;
+        const restoredCustomers = backupObj.customers || null;
+
+        if (!restoredConfig && !restoredInventory) {
+          throw new Error("فایل پشتیبان فاقد پیکربندی یا لیست محصولات معتبر است.");
+        }
+
+        // Send Config
+        if (restoredConfig) {
+          const configRes = await fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(restoredConfig),
+          });
+          if (!configRes.ok) throw new Error("خطا در بازگردانی تنظیمات ربات روی سرور");
+        }
+
+        // Send Inventory
+        if (restoredInventory) {
+          const inventoryRes = await fetch('/api/inventory', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(restoredInventory),
+          });
+          if (!inventoryRes.ok) throw new Error("خطا در بازگردانی لیست محصولات روی سرور");
+        }
+
+        // Send Customers
+        if (restoredCustomers) {
+          const customersRes = await fetch('/api/customers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(restoredCustomers),
+          });
+          if (!customersRes.ok) throw new Error("خطا در بازگردانی لیست مشتریان روی سرور");
+        }
+
+        // Update local backups to trigger persistence
+        if (restoredConfig) localStorage.setItem('bot_config_backup', JSON.stringify(restoredConfig));
+        if (restoredInventory) localStorage.setItem('bot_inventory_backup', JSON.stringify(restoredInventory));
+        if (restoredCustomers) localStorage.setItem('bot_customers_backup', JSON.stringify(restoredCustomers));
+
+        showMessage('کل اطلاعات پشتیبان (توکن، ادمین و کالاها) با موفقیت بازگردانی و بارگذاری شد!', 'success');
+        fetchState();
+      } catch (err: any) {
+        showMessage(err.message || 'خطا در پردازش و بازگردانی فایل پشتیبان', 'error');
+      } finally {
+        setIsUploading(false);
+        e.target.value = '';
+      }
+    };
+
+    reader.onerror = () => {
+      showMessage('خطا در خواندن فایل پشتیبان', 'error');
+      setIsUploading(false);
+    };
+    reader.readAsText(file);
+  };
+
   const handleAddOrUpdateManual = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualCode.trim()) {
@@ -1174,6 +1300,81 @@ export default function App() {
                     <Save size={18} />
                     ذخیره تنظیمات
                   </button>
+                </div>
+
+                {/* 📦 پشتیبان‌گیری و بازگردانی کامل سیستم (Backup & Restore) */}
+                <div className="border-t border-gray-200 pt-8 mt-8">
+                  <h4 className="text-md font-bold text-gray-900 mb-2 flex items-center gap-2">
+                    <span className="p-1 px-2 rounded-md bg-blue-100 text-blue-700 text-xs">پشتیبان‌گیری</span>
+                    📦 پشتیبان‌گیری و بازگردانی اطلاعات کامل سیستم
+                  </h4>
+                  <p className="text-xs text-gray-500 mb-6 leading-relaxed">
+                    با استفاده از گزینه‌های زیر می‌توانید از کل داده‌های سیستم (شامل توکن ربات، آیدی ادمین، لیست کامل کالاها و تاریخچه مشتریان) فایل پشتیبان تهیه کنید و یا لیست کالاها را جداگانه به صورت فایل اکسل دریافت نمایید.
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* دانلود بکاپ‌ها */}
+                    <div className="p-5 bg-blue-50/50 border border-blue-100 rounded-xl space-y-4 flex flex-col justify-between">
+                      <div>
+                        <h5 className="text-sm font-bold text-blue-950 flex items-center gap-1.5 mb-1.5">
+                          📥 دریافت فایل‌های پشتیبان
+                        </h5>
+                        <p className="text-xs text-gray-600 leading-relaxed">
+                          دانلود کل تنظیمات ربات و موجودی انبار به همراه اکسل محصولات جهت ویرایش و نگهداری آسان:
+                        </p>
+                      </div>
+
+                      <div className="space-y-3.5">
+                        <button
+                          type="button"
+                          onClick={handleExportFullBackup}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer"
+                        >
+                          <DownloadCloud size={16} />
+                          دانلود فایل پشتیبان کامل (JSON)
+                        </button>
+                        
+                        <button
+                          type="button"
+                          onClick={handleExportInventoryExcel}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer"
+                        >
+                          <FileDown size={16} />
+                          خروجی اکسل جداگانه کالاها (XLSX)
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* باکس بازگردانی بکاپ */}
+                    <div className="p-5 bg-amber-50/40 border border-amber-200/60 rounded-xl space-y-4 flex flex-col justify-between">
+                      <div>
+                        <h5 className="text-sm font-bold text-amber-950 flex items-center gap-1.5 mb-1.5">
+                          🔄 باکس بازگردانی اطلاعات کامل (Restore Box)
+                        </h5>
+                        <p className="text-xs text-gray-600 leading-relaxed">
+                          فایل پشتیبان کامل سیستم (فرمت JSON) را در این جعبه بارگذاری کنید تا درجا کل تنظیمات، توکن، ادمین و کالاها لود و بازیابی شوند:
+                        </p>
+                      </div>
+
+                      <div className="relative">
+                        <input
+                          type="file"
+                          accept=".json"
+                          onChange={handleRestoreFullBackup}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          disabled={isUploading}
+                        />
+                        <button
+                          type="button"
+                          disabled={isUploading}
+                          className={`w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition-all shadow-sm ${isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                        >
+                          <Upload size={16} />
+                          {isUploading ? 'درحال بازگردانی اطلاعات...' : 'انتخاب و بازگردانی فایل پشتیبان (JSON)'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
