@@ -147,6 +147,71 @@ EOF
     echo -e "${GREEN}[SUCCESS] Service ${SERVICE_NAME} started successfully!${NC}"
 }
 
+setup_domain_ssl() {
+    echo -e "\n${BLUE}[5/5] Domain & SSL Setup (Nginx + Let's Encrypt)${NC}"
+    
+    read -p "Do you want to configure a custom Domain & SSL Certificate? (y/n) [n]: " CONFIRM_DOMAIN
+    if [[ "$CONFIRM_DOMAIN" =~ ^[Yy]$ ]]; then
+        read -p "Enter your Domain Name (e.g., bot.example.com): " DOMAIN_NAME
+        if [ -z "$DOMAIN_NAME" ]; then
+            echo -e "${RED}Domain name cannot be empty. Skipping SSL setup.${NC}"
+            return
+        fi
+
+        APP_PORT=3000
+        if [ -f "$INSTALL_DIR/.env" ]; then
+            source "$INSTALL_DIR/.env" || true
+            APP_PORT=${PORT:-3000}
+        fi
+
+        echo -e "${BLUE}Installing Nginx and Certbot...${NC}"
+        if command -v apt-get &> /dev/null; then
+            apt-get update -y
+            apt-get install -y nginx certbot python3-certbot-nginx
+        elif command -v yum &> /dev/null; then
+            yum update -y
+            yum install -y nginx certbot python3-certbot-nginx
+        fi
+
+        NGINX_CONF="/etc/nginx/sites-available/$DOMAIN_NAME"
+        if [ ! -d "/etc/nginx/sites-available" ]; then
+            NGINX_CONF="/etc/nginx/conf.d/$DOMAIN_NAME.conf"
+        fi
+
+        cat <<EOF > "$NGINX_CONF"
+server {
+    listen 80;
+    server_name $DOMAIN_NAME;
+
+    location / {
+        proxy_pass http://127.0.0.1:$APP_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    }
+}
+EOF
+
+        if [ -d "/etc/nginx/sites-enabled" ]; then
+            ln -sf "$NGINX_CONF" "/etc/nginx/sites-enabled/$DOMAIN_NAME"
+            rm -f /etc/nginx/sites-enabled/default || true
+        fi
+
+        systemctl restart nginx || service nginx restart
+
+        echo -e "${BLUE}Requesting free SSL Certificate with Certbot for $DOMAIN_NAME...${NC}"
+        certbot --nginx -d "$DOMAIN_NAME" --non-interactive --agree-tos --register-unsafely-without-email || {
+            echo -e "${YELLOW}[WARNING] Certbot could not issue SSL automatically. Make sure your domain points to this server IP and ports 80/443 are open in firewall/X-UI.${NC}"
+        }
+
+        echo -e "${GREEN}[SUCCESS] Domain configured: https://$DOMAIN_NAME${NC}"
+    fi
+}
+
 show_complete() {
     IP_ADDR=$(curl -s https://api.ipify.org || hostname -I | awk '{print $1}')
     echo -e "\n${CYAN}======================================================${NC}"
@@ -166,10 +231,11 @@ manage_menu() {
     echo -e " ${GREEN}4)${NC} Check Service Status (مشاهده وضعیت سرویس)"
     echo -e " ${GREEN}5)${NC} View Live Logs (مشاهده لاگ‌های زنده)"
     echo -e " ${GREEN}6)${NC} Change Port or Environment Variables (تغییر پورت و تنظیمات)"
-    echo -e " ${RED}7)${NC} Uninstall (حذف کامل از سرور)"
+    echo -e " ${GREEN}7)${NC} Configure Domain & Free SSL (اتصال دامنه و دریافت SSL رایگان)"
+    echo -e " ${RED}8)${NC} Uninstall (حذف کامل از سرور)"
     echo -e " ${CYAN}0)${NC} Exit (خروج)"
     echo ""
-    read -p "Select [0-7]: " CHOICE
+    read -p "Select [0-8]: " CHOICE
 
     case $CHOICE in
         1)
@@ -178,6 +244,7 @@ manage_menu() {
             clone_or_update_repo
             build_app
             configure_env_and_service
+            setup_domain_ssl
             show_complete
             ;;
         2)
@@ -203,6 +270,10 @@ manage_menu() {
             configure_env_and_service
             ;;
         7)
+            check_root
+            setup_domain_ssl
+            ;;
+        8)
             check_root
             systemctl stop ${SERVICE_NAME} || true
             systemctl disable ${SERVICE_NAME} || true
