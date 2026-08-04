@@ -692,11 +692,11 @@ const showInventoryPage = async (ctx: any, page: number, isEdit = false) => {
     text += `📝 *نام:* ${item.name}\n`;
     text += `📦 *موجودی:* ${item.stock}\n\n`;
     
-    // Add inline buttons for this item with color badges and style fields
+    // Add inline buttons for this item with style fields (Telegram Bot API 9.4+)
     buttons.push([
-      { text: `🗑️🔴 حذف ${item.code}`, callback_data: `inv_del_${item.code}`, style: 'danger' },
-      { text: `✏️🟡 ویرایش ${item.code}`, callback_data: `inv_edit_${item.code}`, style: 'primary' },
-      { text: `➕🟢 موجودی ${item.code}`, callback_data: `inv_addstock_${item.code}`, style: 'success' }
+      { text: `🗑️ حذف ${item.code}`, callback_data: `inv_del_${item.code}`, style: 'danger' },
+      { text: `✏️ ویرایش ${item.code}`, callback_data: `inv_edit_${item.code}`, style: 'primary' },
+      { text: `➕ موجودی ${item.code}`, callback_data: `inv_addstock_${item.code}`, style: 'success' }
     ]);
   });
 
@@ -713,7 +713,7 @@ const showInventoryPage = async (ctx: any, page: number, isEdit = false) => {
   }
 
   // Add Search Button
-  buttons.push([{ text: "🔍🔵 جستجوی سریع کالا", callback_data: "action_search_product", style: 'primary' }]);
+  buttons.push([{ text: "🔍 جستجوی سریع کالا", callback_data: "action_search_product", style: 'primary' }]);
 
   const replyOptions = {
     parse_mode: 'Markdown',
@@ -797,10 +797,22 @@ async function startBot() {
             "📥 ۴. پشتیبان‌گیری:\n" +
             "روی دکمه دریافت پشتیبان بزنید تا بلافاصله آخرین وضعیت اکسل انبار و مشتریان ارسال شود.",
             Markup.keyboard([
-              ["✍️🟡 ثبت و ویرایش دستی کالا", "📦🟢 لیست کالاهای موجود"],
-              ["🔎🔵 جستجوی کالا", "🗑️🔴 حذف دستی کالا"],
-              ["📤🟢 آپلود موجودی انبار (اکسل)", "📥🔵 دریافت فایل پشتیبان انبار"],
-              ["⚙️🟣 تنظیمات ربات", "💡 راهنمای کامل"]
+              [
+                { text: "✍️ ثبت و ویرایش دستی کالا", style: "primary" },
+                { text: "📦 لیست کالاهای موجود", style: "success" }
+              ],
+              [
+                { text: "🔎 جستجوی کالا", style: "primary" },
+                { text: "🗑️ حذف دستی کالا", style: "danger" }
+              ],
+              [
+                { text: "📤 آپلود موجودی انبار (اکسل)", style: "success" },
+                { text: "📥 دریافت فایل پشتیبان انبار", style: "primary" }
+              ],
+              [
+                { text: "⚙️ تنظیمات ربات", style: "primary" },
+                { text: "💡 راهنمای کامل", style: "success" }
+              ]
             ]).resize()
           );
         } else {
@@ -1443,9 +1455,9 @@ async function startBot() {
                 results.forEach(item => {
                   replyText += `🔹 *کد:* \`${item.code}\`\n📝 *نام:* ${item.name}\n📦 *موجودی:* ${item.stock}\n\n`;
                   buttons.push([
-                    { text: `🗑️🔴 حذف ${item.code}`, callback_data: `inv_del_${item.code}`, style: 'danger' },
-                    { text: `✏️🟡 ویرایش ${item.code}`, callback_data: `inv_edit_${item.code}`, style: 'primary' },
-                    { text: `➕🟢 موجودی ${item.code}`, callback_data: `inv_addstock_${item.code}`, style: 'success' }
+                    { text: `🗑️ حذف ${item.code}`, callback_data: `inv_del_${item.code}`, style: 'danger' },
+                    { text: `✏️ ویرایش ${item.code}`, callback_data: `inv_edit_${item.code}`, style: 'primary' },
+                    { text: `➕ موجودی ${item.code}`, callback_data: `inv_addstock_${item.code}`, style: 'success' }
                   ]);
                 });
                 ctx.reply(replyText, {
