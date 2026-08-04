@@ -828,7 +828,7 @@ export default function App() {
                           <button
                             type="button"
                             onClick={handleUserbotLogout}
-                            className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg text-xs font-bold transition-all"
+                            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
                           >
                             خروج و قطع اتصال اکانت
                           </button>
@@ -850,7 +850,7 @@ export default function App() {
                               type="button"
                               onClick={fetchDialogGroups}
                               disabled={isLoadingDialogs}
-                              className="text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 px-3.5 py-1.5 rounded-lg font-bold transition-all disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer text-center"
+                              className="text-xs bg-purple-600 hover:bg-purple-700 text-white px-3.5 py-1.5 rounded-lg font-bold transition-all disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer text-center shadow-sm"
                             >
                               {isLoadingDialogs ? 'درحال بارگذاری...' : '🔄 بارگذاری و بروزرسانی گروه‌ها'}
                             </button>
@@ -868,7 +868,7 @@ export default function App() {
                               <button
                                 type="button"
                                 onClick={fetchDialogGroups}
-                                className="text-xs text-purple-600 font-bold underline mt-2 block mx-auto cursor-pointer"
+                                className="text-xs bg-purple-600 hover:bg-purple-700 text-white font-bold py-1.5 px-4 rounded-lg transition-all mx-auto block mt-2 shadow-sm"
                               >
                                 دریافت و بروزرسانی لیست گروه‌ها
                               </button>
@@ -1108,7 +1108,7 @@ export default function App() {
                                     setUserbotEmailPattern(null);
                                     setUserbotCodeLength(null);
                                   }}
-                                  className="px-3 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition-all shrink-0"
+                                  className="px-3 py-2.5 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-xs font-bold transition-all shrink-0 shadow-sm"
                                 >
                                   بازگشت
                                 </button>
@@ -1294,7 +1294,7 @@ export default function App() {
                           setManualStock('');
                           setIsEditing(false);
                         }}
-                        className="py-2 px-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm transition-all"
+                        className="py-2 px-4 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-lg text-sm transition-all shadow-sm"
                       >
                         انصراف
                       </button>
@@ -1336,14 +1336,14 @@ export default function App() {
                             <div className="inline-flex gap-2">
                               <button 
                                 onClick={() => handleSelectForEdit(item)}
-                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                className="p-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors shadow-xs"
                                 title="ویرایش کالا"
                               >
                                 <Edit size={16} />
                               </button>
                               <button 
                                 onClick={() => handleDeleteItem(item.code)}
-                                className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                className="p-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors shadow-xs"
                                 title="حذف کالا"
                               >
                                 <Trash size={16} />
