@@ -208,7 +208,7 @@ let lastKnownValidConfig = {
   adminId: "",
   groupId: "",
   customerMessage: "",
-  groupAccess: "all" as "all" | "admin" | "group_admins",
+  groupAccess: "all" as "all" | "approved",
   botEnabled: true,
   disableCustomerPm: false
 };
@@ -797,10 +797,22 @@ async function startBot() {
             "📥 ۴. پشتیبان‌گیری:\n" +
             "روی دکمه دریافت پشتیبان بزنید تا بلافاصله آخرین وضعیت اکسل انبار و مشتریان ارسال شود.",
             Markup.keyboard([
-              ["✍️ ثبت و ویرایش دستی کالا", "📦 لیست کالاهای موجود"],
-              ["🔎 جستجوی کالا", "🗑️ حذف دستی کالا"],
-              ["📤 آپلود موجودی انبار (اکسل)", "📥 دریافت فایل پشتیبان انبار"],
-              ["⚙️ تنظیمات ربات", "💡 راهنمای کامل"]
+              [
+                { text: "✍️ ثبت و ویرایش دستی کالا", style: "primary" },
+                { text: "📦 لیست کالاهای موجود", style: "success" }
+              ],
+              [
+                { text: "🔎 جستجوی کالا", style: "primary" },
+                { text: "🗑️ حذف دستی کالا", style: "danger" }
+              ],
+              [
+                { text: "📤 آپلود موجودی انبار (اکسل)", style: "success" },
+                { text: "📥 دریافت فایل پشتیبان انبار", style: "primary" }
+              ],
+              [
+                { text: "⚙️ تنظیمات ربات", style: "primary" },
+                { text: "💡 راهنمای کامل", style: "success" }
+              ]
             ]).resize()
           );
         } else {
