@@ -692,11 +692,11 @@ const showInventoryPage = async (ctx: any, page: number, isEdit = false) => {
     text += `📝 *نام:* ${item.name}\n`;
     text += `📦 *موجودی:* ${item.stock}\n\n`;
     
-    // Add inline buttons for this item with native Telegram Bot API button styles (style: 'danger', 'primary', 'success')
+    // Add inline buttons for this item with color badges and style fields
     buttons.push([
-      { text: `🗑️ حذف ${item.code}`, callback_data: `inv_del_${item.code}`, style: 'danger' },
-      { text: `✏️ ویرایش ${item.code}`, callback_data: `inv_edit_${item.code}`, style: 'primary' },
-      { text: `➕ موجودی ${item.code}`, callback_data: `inv_addstock_${item.code}`, style: 'success' }
+      { text: `🗑️🔴 حذف ${item.code}`, callback_data: `inv_del_${item.code}`, style: 'danger' },
+      { text: `✏️🟡 ویرایش ${item.code}`, callback_data: `inv_edit_${item.code}`, style: 'primary' },
+      { text: `➕🟢 موجودی ${item.code}`, callback_data: `inv_addstock_${item.code}`, style: 'success' }
     ]);
   });
 
@@ -713,7 +713,7 @@ const showInventoryPage = async (ctx: any, page: number, isEdit = false) => {
   }
 
   // Add Search Button
-  buttons.push([{ text: "🔍 جستجوی سریع کالا", callback_data: "action_search_product", style: 'primary' }]);
+  buttons.push([{ text: "🔍🔵 جستجوی سریع کالا", callback_data: "action_search_product", style: 'primary' }]);
 
   const replyOptions = {
     parse_mode: 'Markdown',
@@ -797,10 +797,10 @@ async function startBot() {
             "📥 ۴. پشتیبان‌گیری:\n" +
             "روی دکمه دریافت پشتیبان بزنید تا بلافاصله آخرین وضعیت اکسل انبار و مشتریان ارسال شود.",
             Markup.keyboard([
-              ["✍️ ثبت و ویرایش دستی کالا", "📦 لیست کالاهای موجود"],
-              ["🔎 جستجوی کالا", "🗑️ حذف دستی کالا"],
-              ["📤 آپلود موجودی انبار (اکسل)", "📥 دریافت فایل پشتیبان انبار"],
-              ["⚙️ تنظیمات ربات", "💡 راهنمای کامل"]
+              ["✍️🟡 ثبت و ویرایش دستی کالا", "📦🟢 لیست کالاهای موجود"],
+              ["🔎🔵 جستجوی کالا", "🗑️🔴 حذف دستی کالا"],
+              ["📤🟢 آپلود موجودی انبار (اکسل)", "📥🔵 دریافت فایل پشتیبان انبار"],
+              ["⚙️🟣 تنظیمات ربات", "💡 راهنمای کامل"]
             ]).resize()
           );
         } else {
@@ -810,7 +810,7 @@ async function startBot() {
     });
 
     // Custom Button Listeners for Admin Menu
-    bot.hears("✍️ ثبت و ویرایش دستی کالا", (ctx: any) => {
+    bot.hears(/✍️.*ثبت و ویرایش دستی کالا/i, (ctx: any) => {
       if (ctx.chat.type === "private" && isAdmin(ctx)) {
         ctx.reply(
           "👇 جهت افزودن یا ویرایش دستی کالا از طریق دکمه زیر اقدام کنید:",
@@ -842,7 +842,7 @@ async function startBot() {
       }
     });
 
-    bot.hears("🗑️ حذف دستی کالا", (ctx: any) => {
+    bot.hears(/🗑️.*حذف دستی کالا/i, (ctx: any) => {
       if (ctx.chat.type === "private" && isAdmin(ctx)) {
         adminSessions[ctx.from.id] = { step: 'awaiting_delete_search', data: {} };
         ctx.reply("🗑️ لطفاً **نام** یا **کد** کالا را برای حذف ارسال کنید:", {
@@ -854,13 +854,13 @@ async function startBot() {
       }
     });
 
-    bot.hears("📦 لیست کالاهای موجود", (ctx: any) => {
+    bot.hears(/📦.*لیست کالاهای موجود/i, (ctx: any) => {
       if (ctx.chat.type === "private" && isAdmin(ctx)) {
         showInventoryPage(ctx, 0);
       }
     });
 
-    bot.hears("🔎 جستجوی کالا", (ctx: any) => {
+    bot.hears(/🔎.*جستجوی کالا/i, (ctx: any) => {
       if (ctx.chat.type === "private" && isAdmin(ctx)) {
         adminSessions[ctx.from.id] = { step: 'awaiting_search_query', data: {} };
         ctx.reply("🔎 لطفاً **کد** یا **نام** کالا را برای جستجو وارد کنید:\n\n(برای انصراف از دکمه زیر استفاده کنید)", {
@@ -935,7 +935,7 @@ async function startBot() {
       }
     });
 
-    bot.hears("📤 آپلود موجودی انبار (اکسل)", (ctx: any) => {
+    bot.hears(/📤.*آپلود موجودی انبار/i, (ctx: any) => {
       if (ctx.chat.type === "private" && isAdmin(ctx)) {
         ctx.replyWithMarkdown(
           "📤 *بارگذاری دسته‌جمعی لیست کالاها از اکسل:*\n\n" +
@@ -945,7 +945,7 @@ async function startBot() {
       }
     });
 
-    bot.hears("📥 دریافت فایل پشتیبان انبار", async (ctx: any) => {
+    bot.hears(/📥.*دریافت فایل پشتیبان/i, async (ctx: any) => {
       if (ctx.chat.type === "private" && isAdmin(ctx)) {
          try {
             ctx.reply("در حال بازیابی اطلاعات و ساخت فایل اکسل پشتیبان...");
@@ -974,7 +974,7 @@ async function startBot() {
       }
     });
 
-    bot.hears("💡 راهنمای کامل", (ctx: any) => {
+    bot.hears(/💡.*راهنمای کامل/i, (ctx: any) => {
       if (ctx.chat.type === "private" && isAdmin(ctx)) {
         ctx.reply(
           "💡 *راهنمای کامل سیستم پایش هوشمند انبار:*\n\n" +
@@ -1032,7 +1032,7 @@ async function startBot() {
       });
     };
 
-    bot.hears("⚙️ تنظیمات ربات", (ctx: any) => {
+    bot.hears(/⚙️.*تنظیمات ربات/i, (ctx: any) => {
       if (ctx.chat.type === "private" && isAdmin(ctx)) {
         showAdminSettingsKeyboard(ctx);
       }
@@ -1443,9 +1443,9 @@ async function startBot() {
                 results.forEach(item => {
                   replyText += `🔹 *کد:* \`${item.code}\`\n📝 *نام:* ${item.name}\n📦 *موجودی:* ${item.stock}\n\n`;
                   buttons.push([
-                    { text: `➖ حذف ${item.code}`, callback_data: `inv_del_${item.code}` },
-                    { text: `✏️ ویرایش ${item.code}`, callback_data: `inv_edit_${item.code}` },
-                    { text: `➕ موجودی ${item.code}`, callback_data: `inv_addstock_${item.code}` }
+                    { text: `🗑️🔴 حذف ${item.code}`, callback_data: `inv_del_${item.code}`, style: 'danger' },
+                    { text: `✏️🟡 ویرایش ${item.code}`, callback_data: `inv_edit_${item.code}`, style: 'primary' },
+                    { text: `➕🟢 موجودی ${item.code}`, callback_data: `inv_addstock_${item.code}`, style: 'success' }
                   ]);
                 });
                 ctx.reply(replyText, {
