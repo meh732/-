@@ -1,0 +1,8 @@
+{
+  "name": "Remix ربات دستیار موجودی",
+  "description": "مدیریت فایل اکسل موجودی کالا و بررسی خودکار کد کالاها در گروه تلگرام",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
