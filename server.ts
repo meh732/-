@@ -840,7 +840,7 @@ async function startBot() {
         await ctx.editMessageText("📝 لطفاً **کد کالا** را ارسال کنید:\n\n(برای انصراف از دکمه زیر استفاده کنید)", {
           parse_mode: 'Markdown',
           reply_markup: {
-            inline_keyboard: [[{ text: "❌ انصراف", callback_data: "cancel_add_product" }]]
+            inline_keyboard: [[{ text: "❌ انصراف", callback_data: "cancel_add_product", style: "danger" }]]
           }
         });
       }
@@ -860,7 +860,7 @@ async function startBot() {
         ctx.reply("🗑️ لطفاً **نام** یا **کد** کالا را برای حذف ارسال کنید:", {
           parse_mode: 'Markdown',
           reply_markup: {
-            inline_keyboard: [[{ text: "❌ انصراف", callback_data: "cancel_add_product" }]]
+            inline_keyboard: [[{ text: "❌ انصراف", callback_data: "cancel_add_product", style: "danger" }]]
           }
         });
       }
@@ -877,7 +877,7 @@ async function startBot() {
         adminSessions[ctx.from.id] = { step: 'awaiting_search_query', data: {} };
         ctx.reply("🔎 لطفاً **کد** یا **نام** کالا را برای جستجو وارد کنید:\n\n(برای انصراف از دکمه زیر استفاده کنید)", {
           parse_mode: 'Markdown',
-          reply_markup: { inline_keyboard: [[{ text: "❌ انصراف", callback_data: "cancel_add_product" }]] }
+          reply_markup: { inline_keyboard: [[{ text: "❌ انصراف", callback_data: "cancel_add_product", style: "danger" }]] }
         });
       }
     });
@@ -888,7 +888,7 @@ async function startBot() {
         await ctx.answerCbQuery();
         ctx.reply("🔎 لطفاً **کد** یا **نام** کالا را برای جستجو وارد کنید:\n\n(برای انصراف از دکمه زیر استفاده کنید)", {
           parse_mode: 'Markdown',
-          reply_markup: { inline_keyboard: [[{ text: "❌ انصراف", callback_data: "cancel_add_product" }]] }
+          reply_markup: { inline_keyboard: [[{ text: "❌ انصراف", callback_data: "cancel_add_product", style: "danger" }]] }
         });
       } else {
         await ctx.answerCbQuery("❌ شما دسترسی ندارید.", { show_alert: true }).catch(() => {});
@@ -930,7 +930,7 @@ async function startBot() {
         await ctx.answerCbQuery();
         ctx.reply(`✍️ ویرایش کالای ${code}\n\nلطفاً **نام جدید کالا** را وارد کنید:`, {
           parse_mode: 'Markdown',
-          reply_markup: { inline_keyboard: [[{ text: "❌ انصراف", callback_data: "cancel_add_product" }]] }
+          reply_markup: { inline_keyboard: [[{ text: "❌ انصراف", callback_data: "cancel_add_product", style: "danger" }]] }
         });
       }
     });
@@ -942,7 +942,7 @@ async function startBot() {
         await ctx.answerCbQuery();
         ctx.reply(`➕ تغییر موجودی کالای ${code}\n\nلطفاً **تعداد موجودی جدید** را به صورت عدد وارد کنید:`, {
           parse_mode: 'Markdown',
-          reply_markup: { inline_keyboard: [[{ text: "❌ انصراف", callback_data: "cancel_add_product" }]] }
+          reply_markup: { inline_keyboard: [[{ text: "❌ انصراف", callback_data: "cancel_add_product", style: "danger" }]] }
         });
       }
     });
@@ -1377,7 +1377,7 @@ async function startBot() {
               return ctx.reply("✅ کد دریافت شد.\n\n📝 حالا **نام کالا** را وارد کنید:\n\n(برای انصراف از دکمه زیر استفاده کنید)", {
                 parse_mode: 'Markdown',
                 reply_markup: {
-                  inline_keyboard: [[{ text: "❌ انصراف", callback_data: "cancel_add_product" }]]
+                  inline_keyboard: [[{ text: "❌ انصراف", callback_data: "cancel_add_product", style: "danger" }]]
                 }
               });
             } else if (session.step === 'awaiting_product_name') {
@@ -1386,7 +1386,7 @@ async function startBot() {
               return ctx.reply("✅ نام دریافت شد.\n\n📝 لطفاً **موجودی** را به صورت عدد وارد کنید:\n\n(برای انصراف از دکمه زیر استفاده کنید)", {
                 parse_mode: 'Markdown',
                 reply_markup: {
-                  inline_keyboard: [[{ text: "❌ انصراف", callback_data: "cancel_add_product" }]]
+                  inline_keyboard: [[{ text: "❌ انصراف", callback_data: "cancel_add_product", style: "danger" }]]
                 }
               });
             } else if (session.step === 'awaiting_product_stock') {
@@ -1394,7 +1394,7 @@ async function startBot() {
               if (isNaN(stock)) {
                 return ctx.reply("❌ لطفا موجودی را فقط به صورت عدد صحیح وارد کنید:", {
                   reply_markup: {
-                    inline_keyboard: [[{ text: "❌ انصراف", callback_data: "cancel_add_product" }]]
+                    inline_keyboard: [[{ text: "❌ انصراف", callback_data: "cancel_add_product", style: "danger" }]]
                   }
                 });
               }
@@ -1491,10 +1491,10 @@ async function startBot() {
                 let replyText = `🗑️ نتایج یافت‌شده برای حذف کالا "${queryRaw}":\n\n`;
                 const buttons: any[][] = [];
                 results.forEach(item => {
-                  replyText += `🔹 *کد:* \`${item.code}\`\n📝 *نام:* ${item.name}\n📦 *موجودی:* ${item.stock}\n\n`;
-                  buttons.push([
-                    { text: `🗑️ حذف قطعی ${item.code}`, callback_data: `inv_del_${item.code}` }
-                  ]);
+                   replyText += `🔹 *کد:* \`${item.code}\`\n📝 *نام:* ${item.name}\n📦 *موجودی:* ${item.stock}\n\n`;
+                   buttons.push([
+                     { text: `🗑️ حذف قطعی ${item.code}`, callback_data: `inv_del_${item.code}`, style: 'danger' }
+                   ]);
                 });
                 ctx.reply(replyText, {
                   parse_mode: 'Markdown',
@@ -1507,7 +1507,10 @@ async function startBot() {
           }
 
           // If admin types a raw text message that doesn't match our custom menu buttons
-          const btnTitles = ["✍️ ثبت و ویرایش دستی کالا", "🗑️ حذف دستی کالا", "🔎 جستجوی کالا", "📦 لیست کالاهای موجود", "📥 دریافت فایل پشتیبان انبار", "⚙️ تنظیمات ربات", "💡 راهنمای کامل"];
+          const btnTitles = [
+            "✍️ ثبت و ویرایش دستی کالا", "📦 لیست کالاهای موجود", "🔎 جستجوی کالا", "🗑️ حذف دستی کالا", "📤 آپلود موجودی انبار (اکسل)", "📥 دریافت فایل پشتیبان انبار", "⚙️ تنظیمات ربات", "💡 راهنمای کامل",
+            "✍️🟡 ثبت و ویرایش دستی کالا", "📦🟢 لیست کالاهای موجود", "🔎🔵 جستجوی کالا", "🗑️🔴 حذف دستی کالا", "📤🟢 آپلود موجودی انبار (اکسل)", "📥🔵 دریافت فایل پشتیبان انبار", "⚙️🟣 تنظیمات ربات"
+          ];
           if (!text.startsWith('/') && !btnTitles.includes(text)) {
              ctx.reply("مدیر گرامی، برای بروزرسانی موجودی انبار کافیست فایل اکسل جدید انبار (.xlsx) خود را مستقیماً به همینجا بفرستید.");
           }
