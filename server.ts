@@ -61,6 +61,8 @@ const normalizePersianArabicNumbers = (str: string): string => {
   for (let i = 0; i < 10; i++) {
     res = res.replace(persianNumbers[i], String(i)).replace(arabicNumbers[i], String(i));
   }
+  // Normalize Arabic Yeh and Kaf to Persian
+  res = res.replace(/ي/g, "ی").replace(/ك/g, "ک");
   return res;
 };
 
@@ -203,12 +205,20 @@ let lastCheckedTime = 0;
 let lastLoadedMtime = 0;
 const DISK_CHECK_COOLDOWN_MS = 2000;
 
-let lastKnownValidConfig = {
+let lastKnownValidConfig: {
+  token: string;
+  adminId: string;
+  groupId: string;
+  customerMessage: string;
+  groupAccess: "all" | "admin" | "group_admins";
+  botEnabled: boolean;
+  disableCustomerPm: boolean;
+} = {
   token: "",
   adminId: "",
   groupId: "",
   customerMessage: "",
-  groupAccess: "all" as "all" | "approved",
+  groupAccess: "all",
   botEnabled: true,
   disableCustomerPm: false
 };
@@ -520,6 +530,17 @@ async function startUserbot() {
         const chatTitle = chat ? (chat.title || "گروه") : "گروه تحت پایش سلف";
         const chatUsername = chat?.username ? String(chat.username) : "";
 
+        // Skip if chat title indicates deleted, deactivated, or inactive group
+        const lowerTitle = (chatTitle || "").toLowerCase();
+        if (
+          lowerTitle.includes("deleted account") || 
+          lowerTitle.includes("deactivated") || 
+          lowerTitle.includes("حذف شده") || 
+          lowerTitle.includes("حذفی")
+        ) {
+          return; // Skip deleted/inactive groups
+        }
+
         // Check if targeted to specific userbot groups
         if (state.config.userbotGroups && state.config.userbotGroups.trim() !== "") {
           const watched = state.config.userbotGroups.split(",")
@@ -528,11 +549,35 @@ async function startUserbot() {
           if (watched.length > 0) {
             const normalizeId = (id: string) => id.trim().toLowerCase().replace(/^-100/, "").replace(/^-/, "");
             const normChatId = normalizeId(chatId);
+            
+            const cleanStringForMatch = (s: string) => {
+              const normalized = normalizePersianArabicNumbers(s).toLowerCase();
+              return normalized.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, "");
+            };
+            const normChatTitle = cleanStringForMatch(chatTitle || "");
+
             const isMatch = watched.some(w => {
               const normW = normalizeId(w);
-              return normChatId === normW ||
-                     (chatUsername && (normW === chatUsername.toLowerCase() || normW === `@${chatUsername.toLowerCase()}`));
+              
+              // 1. Match by ID
+              if (normChatId === normW) return true;
+              
+              // 2. Match by Username (ignores @ and is case-insensitive)
+              if (chatUsername) {
+                const cleanU = chatUsername.toLowerCase().replace(/^@/, "");
+                const cleanW = w.replace(/^@/, "");
+                if (cleanU === cleanW) return true;
+              }
+
+              // 3. Match by Group Title (ignores spaces, dots, and is case-insensitive)
+              const normWTitle = cleanStringForMatch(w);
+              if (normWTitle && (normChatTitle.includes(normWTitle) || normWTitle.includes(normChatTitle))) {
+                return true;
+              }
+
+              return false;
             });
+
             if (!isMatch) return; // ignore unwatched chat
           }
         }
@@ -798,20 +843,20 @@ async function startBot() {
             "روی دکمه دریافت پشتیبان بزنید تا بلافاصله آخرین وضعیت اکسل انبار و مشتریان ارسال شود.",
             Markup.keyboard([
               [
-                { text: "✍️ ثبت و ویرایش دستی کالا", style: "primary" },
-                { text: "📦 لیست کالاهای موجود", style: "success" }
+                "✍️ ثبت و ویرایش دستی کالا",
+                "📦 لیست کالاهای موجود"
               ],
               [
-                { text: "🔎 جستجوی کالا", style: "primary" },
-                { text: "🗑️ حذف دستی کالا", style: "danger" }
+                "🔎 جستجوی کالا",
+                "🗑️ حذف دستی کالا"
               ],
               [
-                { text: "📤 آپلود موجودی انبار (اکسل)", style: "success" },
-                { text: "📥 دریافت فایل پشتیبان انبار", style: "primary" }
+                "📤 آپلود موجودی انبار (اکسل)",
+                "📥 دریافت فایل پشتیبان انبار"
               ],
               [
-                { text: "⚙️ تنظیمات ربات", style: "primary" },
-                { text: "💡 راهنمای کامل", style: "success" }
+                "⚙️ تنظیمات ربات",
+                "💡 راهنمای کامل"
               ]
             ]).resize()
           );
@@ -1328,10 +1373,16 @@ async function startBot() {
                 return ctx.reply("❌ ستون 'کد' (یا code) in ردیف اول فایل اکسل پیدا نشد.");
               }
 
-              const newInventory: InventoryItem[] = [];
+              const existingInventory = [...(state.inventory || [])];
+              let addedCount = 0;
+              let updatedCount = 0;
+
               for (let i = 1; i < data.length; i++) {
                 const row = data[i];
                 if (!row || row.length === 0 || !row[codeIdx]) continue;
+                
+                const rawCode = String(row[codeIdx]).trim();
+                const rawName = nameIdx !== -1 && row[nameIdx] ? String(row[nameIdx]).trim() : 'بدون نام';
                 
                 // If stock column/value is missing, default it to 1 so the item is in-stock by default.
                 let itemStock = 1;
@@ -1340,17 +1391,31 @@ async function startBot() {
                   itemStock = isNaN(numValue) ? 0 : numValue;
                 }
 
-                newInventory.push({
-                  code: String(row[codeIdx]).trim(),
-                  name: nameIdx !== -1 && row[nameIdx] ? String(row[nameIdx]).trim() : 'بدون نام',
-                  stock: itemStock
-                });
+                const sanitizedInputCode = sanitizeCode(rawCode);
+                const existingIdx = existingInventory.findIndex(item => sanitizeCode(item.code) === sanitizedInputCode);
+
+                if (existingIdx !== -1) {
+                  // Update existing item
+                  existingInventory[existingIdx] = {
+                    code: rawCode, // keep the format of the code from the latest Excel
+                    name: rawName !== 'بدون نام' ? rawName : existingInventory[existingIdx].name,
+                    stock: itemStock
+                  };
+                  updatedCount++;
+                } else {
+                  // Add as new item
+                  existingInventory.push({
+                    code: rawCode,
+                    name: rawName,
+                    stock: itemStock
+                  });
+                  addedCount++;
+                }
               }
 
-              // Replace existing inventory completely
-              state.inventory = newInventory;
+              state.inventory = existingInventory;
               saveState();
-              ctx.reply(`✅ موجودی انبار با موفقیت با فایل اکسل جایگزین شد.\nتعداد ${newInventory.length} کالا در انبار ثبت شد.`);
+              ctx.reply(`✅ موجودی انبار با موفقیت با فایل اکسل همگام‌سازی و بروزرسانی شد.\n\n➕ تعداد کالا‌های جدید: ${addedCount}\n✏️ تعداد کالاهای بروزرسانی‌شده: ${updatedCount}\n📦 کل کالاهای موجود در انبار: ${state.inventory.length}`);
            } catch (e: any) {
               console.error(e);
               ctx.reply("❌ خطا در پردازش فایل: " + e.message);
@@ -2163,9 +2228,27 @@ app.get("/api/userbot/dialogs", async (req, res) => {
           username = String(entity.username);
         }
         
+        // Skip deleted, left, kicked, or empty/forbidden groups/channels
+        if (entity) {
+          if (entity.left || entity.kicked || entity.deactivated) continue;
+          const className = entity.className || "";
+          if (className.includes("Forbidden") || className.includes("Empty")) continue;
+        }
+        
+        const title = d.title || "";
+        const lowerTitle = title.toLowerCase();
+        if (
+          lowerTitle.includes("deleted account") || 
+          lowerTitle.includes("deactivated") || 
+          lowerTitle.includes("حذف شده") || 
+          lowerTitle.includes("حذفی")
+        ) {
+          continue;
+        }
+        
         groups.push({
           id: String(d.id),
-          title: d.title || "بدون نام",
+          title: title || "بدون نام",
           username: username,
           isChannel: !!d.isChannel
         });

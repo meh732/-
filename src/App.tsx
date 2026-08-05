@@ -3,9 +3,21 @@ import * as XLSX from 'xlsx';
 import { Bot, Upload, Settings, List, Save, Play, Square, Server, CheckCircle2, AlertCircle, Info, Users, Plus, Edit, Trash, FileDown, DownloadCloud } from 'lucide-react';
 import type { AppState, BotConfig, InventoryItem, CustomerRequest } from './types';
 
+const normalizePersianArabicNumbers = (str: string): string => {
+  const persianNumbers = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
+  const arabicNumbers  = [/٠/g, /١/g, /٢/g, /٣/g, /٤/g, /٥/g, /٦/g, /٧/g, /٨/g, /٩/g];
+  let res = str;
+  for (let i = 0; i < 10; i++) {
+    res = res.replace(persianNumbers[i], String(i)).replace(arabicNumbers[i], String(i));
+  }
+  res = res.replace(/ي/g, "ی").replace(/ك/g, "ک");
+  return res;
+};
+
 const sanitizeCode = (code: string | undefined | null): string => {
   if (!code) return "";
-  return String(code).replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '').toLowerCase();
+  const normalized = normalizePersianArabicNumbers(String(code));
+  return normalized.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '').toLowerCase();
 };
 
 export default function App() {
@@ -513,10 +525,16 @@ export default function App() {
           throw new Error("ستون 'کد' (یا code) در ردیف اول فایل اکسل پیدا نشد.");
         }
 
-        const newInventory: InventoryItem[] = [];
+        const existingInventory = [...(state.inventory || [])];
+        let addedCount = 0;
+        let updatedCount = 0;
+
         for (let i = 1; i < data.length; i++) {
           const row = data[i];
           if (!row || row.length === 0 || !row[codeIdx]) continue;
+          
+          const rawCode = String(row[codeIdx]).trim();
+          const rawName = nameIdx !== -1 && row[nameIdx] ? String(row[nameIdx]).trim() : 'بدون نام';
           
           let itemStock = 1;
           if (stockIdx !== -1 && row[stockIdx] !== undefined && row[stockIdx] !== null && String(row[stockIdx]).trim() !== "") {
@@ -524,23 +542,36 @@ export default function App() {
             itemStock = isNaN(numValue) ? 0 : numValue;
           }
 
-          newInventory.push({
-            code: String(row[codeIdx]).trim(),
-            name: nameIdx !== -1 && row[nameIdx] ? String(row[nameIdx]).trim() : 'بدون نام',
-            stock: itemStock
-          });
+          const sanitizedInputCode = sanitizeCode(rawCode);
+          const existingIdx = existingInventory.findIndex(item => sanitizeCode(item.code) === sanitizedInputCode);
+
+          if (existingIdx !== -1) {
+            existingInventory[existingIdx] = {
+              code: rawCode,
+              name: rawName !== 'بدون نام' ? rawName : existingInventory[existingIdx].name,
+              stock: itemStock
+            };
+            updatedCount++;
+          } else {
+            existingInventory.push({
+              code: rawCode,
+              name: rawName,
+              stock: itemStock
+            });
+            addedCount++;
+          }
         }
 
-        // Replace the inventory completely with the parsed excel file
+        // Send the updated merged inventory to the server
         const res = await fetch('/api/inventory', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newInventory),
+          body: JSON.stringify(existingInventory),
         });
         
         if (res.ok) {
-          setState(prev => prev ? ({ ...prev, inventory: newInventory }) : null);
-          showMessage(`موجودی انبار با موفقیت با اکسل جایگزین شد! ${newInventory.length} قلم کالا ذخیره گردید.`, 'success');
+          setState(prev => prev ? ({ ...prev, inventory: existingInventory }) : null);
+          showMessage(`همگام‌سازی اکسل با انبار موفقیت‌آمیز بود! تعداد ${addedCount} کالا اضافه و ${updatedCount} کالا بروزرسانی شد.`, 'success');
         } else {
           throw new Error("خطا در ذخیره در سرور");
         }
@@ -606,7 +637,7 @@ export default function App() {
         )}
 
         {/* Custom Tabs */}
-        <div className="flex flex-wrap gap-2 mb-8 border-b border-gray-200 pb-px">
+        <div className="flex flex-wrap gap-2.5 mb-8">
           {[
             { id: 'settings', icon: Settings, label: 'تنظیمات ربات' },
             { id: 'inventory', icon: List, label: 'موجودی کالاها' },
@@ -615,10 +646,10 @@ export default function App() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-6 py-3 font-medium text-sm transition-colors border-b-2
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-bold text-sm transition-all shadow-xs cursor-pointer
                 ${activeTab === tab.id 
-                  ? 'border-blue-600 text-blue-600' 
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-blue-600 text-white shadow-sm' 
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
                 }
               `}
             >
@@ -1108,7 +1139,7 @@ export default function App() {
                                     setUserbotEmailPattern(null);
                                     setUserbotCodeLength(null);
                                   }}
-                                  className="px-3 py-2.5 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-xs font-bold transition-all shrink-0 shadow-sm"
+                                  className="px-3 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shrink-0 shadow-sm cursor-pointer"
                                 >
                                   بازگشت
                                 </button>
@@ -1294,7 +1325,7 @@ export default function App() {
                           setManualStock('');
                           setIsEditing(false);
                         }}
-                        className="py-2 px-4 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-lg text-sm transition-all shadow-sm"
+                        className="py-2 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-sm transition-all shadow-sm cursor-pointer"
                       >
                         انصراف
                       </button>
@@ -1336,14 +1367,14 @@ export default function App() {
                             <div className="inline-flex gap-2">
                               <button 
                                 onClick={() => handleSelectForEdit(item)}
-                                className="p-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors shadow-xs"
+                                className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-xs cursor-pointer"
                                 title="ویرایش کالا"
                               >
                                 <Edit size={16} />
                               </button>
                               <button 
                                 onClick={() => handleDeleteItem(item.code)}
-                                className="p-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors shadow-xs"
+                                className="p-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors shadow-xs cursor-pointer"
                                 title="حذف کالا"
                               >
                                 <Trash size={16} />
