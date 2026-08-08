@@ -68,8 +68,15 @@ const normalizePersianArabicNumbers = (str: string): string => {
 
 const sanitizeCode = (code: string | undefined): string => {
   if (!code) return "";
-  const normalized = normalizePersianArabicNumbers(String(code));
-  return normalized.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '').toLowerCase();
+  let normalized = normalizePersianArabicNumbers(String(code)).toLowerCase();
+  
+  // Normalize key interchangeable typos/equivalents in part codes (especially common in auto parts)
+  normalized = normalized
+    .replace(/پ/g, 'p')
+    .replace(/ک/g, 'k')
+    .replace(/ی/g, 'y');
+
+  return normalized.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '');
 };
 
 const isAdmin = (ctx: any): boolean => {
@@ -97,8 +104,48 @@ const matchCodeInText = (text: string, code: string): boolean => {
   const cleanCode = sanitizeCode(code);
   if (!cleanCode) return false;
 
+  // Rule: Ignore purely numeric codes of length < 4 to prevent matching quantities (like "1" in "1 عدد" or "12" in "12 عدد")
+  const isPureNumeric = /^\d+$/.test(cleanCode);
+  if (isPureNumeric && cleanCode.length < 4) {
+    return false;
+  }
+
+  // Also ignore extremely short codes (length < 3) in general to prevent false matches with common abbreviations
+  if (cleanCode.length < 3) {
+    return false;
+  }
+
   const normalizedText = normalizePersianArabicNumbers(text);
 
+  // 1. First, check if cleanCode exists as a token match or prefix match in the text
+  // We extract all alphanumeric chunks from the text
+  const tokens = normalizedText.split(/[^a-zA-Z0-9\u0600-\u06FF]+/);
+  for (const token of tokens) {
+    const cleanToken = sanitizeCode(token);
+    if (!cleanToken) continue;
+
+    // Check pure numeric safety for the token
+    const isTokenNumeric = /^\d+$/.test(cleanToken);
+    if (isTokenNumeric && cleanToken.length < 4) continue;
+
+    // Exact match
+    if (cleanToken === cleanCode) {
+      return true;
+    }
+
+    // Smart partial match for part numbers:
+    // If the token is a prefix of the item code (e.g. text has "54830-2H", item is "54830-2H000")
+    if (cleanCode.startsWith(cleanToken) && cleanToken.length >= 5) {
+      return true;
+    }
+
+    // If the item code is a prefix of the token (e.g. text has "54830-2H000", item is "54830-2H")
+    if (cleanToken.startsWith(cleanCode) && cleanCode.length >= 5) {
+      return true;
+    }
+  }
+
+  // 2. Fall back to regex-based spacing-tolerant match
   try {
     const separatorPattern = '[^a-zA-Z0-9\\u0600-\\u06FF]*';
     const bodyPattern = cleanCode.split('').join(separatorPattern);
@@ -136,6 +183,10 @@ const matchCodeInText = (text: string, code: string): boolean => {
       }
 
       if (bBefore && bAfter) {
+        // Additional guard: if we matched using regex fallback, ensure we don't match a quantity number
+        if (isPureNumeric && cleanCode.length < 4) {
+          continue; 
+        }
         return true;
       }
     }
@@ -587,8 +638,8 @@ async function startUserbot() {
 
         const normalizedText = normalizePersianArabicNumbers(message.text);
         const foundItems = state.inventory.filter(item => {
+          // Check code match strictly
           if (matchCodeInText(normalizedText, item.code)) return true;
-          if (item.name && item.name !== "بدون نام" && matchCodeInText(normalizedText, item.name)) return true;
           return false;
         });
 

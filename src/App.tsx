@@ -16,8 +16,15 @@ const normalizePersianArabicNumbers = (str: string): string => {
 
 const sanitizeCode = (code: string | undefined | null): string => {
   if (!code) return "";
-  const normalized = normalizePersianArabicNumbers(String(code));
-  return normalized.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '').toLowerCase();
+  let normalized = normalizePersianArabicNumbers(String(code)).toLowerCase();
+  
+  // Normalize key interchangeable typos/equivalents in part codes (especially common in auto parts)
+  normalized = normalized
+    .replace(/پ/g, 'p')
+    .replace(/ک/g, 'k')
+    .replace(/ی/g, 'y');
+
+  return normalized.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '');
 };
 
 export default function App() {
