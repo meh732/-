@@ -117,84 +117,27 @@ const matchCodeInText = (text: string, code: string): boolean => {
 
   const normalizedText = normalizePersianArabicNumbers(text);
 
-  // 1. First, check if cleanCode exists as a token match or prefix match in the text
-  // We extract all alphanumeric chunks from the text
-  const tokens = normalizedText.split(/[^a-zA-Z0-9\u0600-\u06FF]+/);
-  for (const token of tokens) {
-    const cleanToken = sanitizeCode(token);
-    if (!cleanToken) continue;
+  // We construct a pattern where each character in cleanCode must match in sequence,
+  // but can be optionally separated by common code delimiters (spaces, dots, hyphens, slashes, underscores).
+  // This satisfies: "فاصله و حروف کوچک و بزرگ و خط تیره و نقطه فرق نکنه" (spaces, casing, hyphens, dots don't matter)
+  const escapedChars = cleanCode.split('').map(char => {
+    return char.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+  });
 
-    // Check pure numeric safety for the token
-    const isTokenNumeric = /^\d+$/.test(cleanToken);
-    if (isTokenNumeric && cleanToken.length < 4) continue;
+  const charPattern = escapedChars.join('[-.\\s/_]*');
 
-    // Exact match
-    if (cleanToken === cleanCode) {
-      return true;
-    }
+  // Boundaries: Lookbehind and Lookahead ensuring we don't start or end adjacent to alphanumeric or Persian/Arabic characters.
+  // This satisfies: "بررسی کنه کد کامل باشه ... کد نصفه هم اعلام نکنه" (check that the code is complete and don't match partials).
+  const regexStr = `(?<![a-zA-Z0-9\\u0600-\\u06FF])${charPattern}(?![a-zA-Z0-9\\u0600-\\u06FF])`;
 
-    // Smart partial match for part numbers:
-    // If the token is a prefix of the item code (e.g. text has "54830-2H", item is "54830-2H000")
-    if (cleanCode.startsWith(cleanToken) && cleanToken.length >= 5) {
-      return true;
-    }
-
-    // If the item code is a prefix of the token (e.g. text has "54830-2H000", item is "54830-2H")
-    if (cleanToken.startsWith(cleanCode) && cleanCode.length >= 5) {
-      return true;
-    }
-  }
-
-  // 2. Fall back to regex-based spacing-tolerant match
   try {
-    const separatorPattern = '[^a-zA-Z0-9\\u0600-\\u06FF]*';
-    const bodyPattern = cleanCode.split('').join(separatorPattern);
-
-    const regex = new RegExp(bodyPattern, 'gi');
-    let match;
-    
-    while ((match = regex.exec(normalizedText)) !== null) {
-      const matchIndex = match.index;
-      const matchStr = match[0];
-      const matchLength = matchStr.length;
-
-      let bBefore = true;
-      if (matchIndex > 0) {
-        const charBefore = normalizedText[matchIndex - 1];
-        const firstCharOfMatch = matchStr[0];
-        
-        const isEngAlphanumeric = (c: string) => /[a-zA-Z0-9]/.test(c);
-        const isPersianArabic = (c: string) => /[\u0600-\u06FF]/.test(c);
-
-        if (isEngAlphanumeric(firstCharOfMatch) && isEngAlphanumeric(charBefore)) bBefore = false;
-        else if (isPersianArabic(firstCharOfMatch) && isPersianArabic(charBefore)) bBefore = false;
-      }
-
-      let bAfter = true;
-      if (matchIndex + matchLength < normalizedText.length) {
-        const charAfter = normalizedText[matchIndex + matchLength];
-        const lastCharOfMatch = matchStr[matchStr.length - 1];
-
-        const isEngAlphanumeric = (c: string) => /[a-zA-Z0-9]/.test(c);
-        const isPersianArabic = (c: string) => /[\u0600-\u06FF]/.test(c);
-
-        if (isEngAlphanumeric(lastCharOfMatch) && isEngAlphanumeric(charAfter)) bAfter = false;
-        else if (isPersianArabic(lastCharOfMatch) && isPersianArabic(charAfter)) bAfter = false;
-      }
-
-      if (bBefore && bAfter) {
-        // Additional guard: if we matched using regex fallback, ensure we don't match a quantity number
-        if (isPureNumeric && cleanCode.length < 4) {
-          continue; 
-        }
-        return true;
-      }
-    }
+    const regex = new RegExp(regexStr, 'i');
+    return regex.test(normalizedText);
   } catch (err) {
-    console.error("Match error, falling back", err);
+    // Absolute fallback
+    const simpleSanitizedText = sanitizeCode(normalizedText);
+    return simpleSanitizedText === cleanCode;
   }
-
-  return false;
 };
 
 const isProd = process.env.NODE_ENV === "production";
